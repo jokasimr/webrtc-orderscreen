@@ -1,0 +1,170 @@
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <style>
+      body {
+        font-family: 'Open Sans', sans-serif;
+      }
+      body > section {
+        display: flex;
+        min-height: 80%;
+        font-size: larger;
+      }
+      header {
+        display: flex;
+      }
+      header > section {
+        width: 50%;
+      }
+      header > section:last-of-type  {
+        text-align: right;
+      }
+      #waiting {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: start;
+        width: 50%;
+        padding-right: 1em;
+        border-right: 2px black solid;
+      }
+      #ready {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: start;
+        justify-content: right;
+        width: 50%;
+        padding-left: 1em;
+      }
+      section span {
+        padding: 0.4em;
+        margin: 0.1em;
+        border-radius: 25% 10%;
+        border: 1px black solid;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .infocus {
+        font-size: 1.2em;
+        background-color: lightgreen;
+      }
+         
+    </style>
+    <header>
+      <section>
+        <h1>Snart klart</h2>
+      </section>
+      <section>
+        <h1>Redo att hamta</h2>
+      </section>
+    </header>
+    <section>
+    <section id="waiting"></section>
+    <section id="ready"></section>
+    </section>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.11.1/simplepeer.min.js"></script>
+    <script>
+
+const orders = new Map();
+      const ready = document.getElementById("ready");
+      const waiting = document.getElementById("waiting");
+
+      const create = (n) => {
+        const e = document.createElement("span");
+        orders.set(n, e);
+        e.innerText = n;
+        e.onclick = event => (
+          e.classList.contains("infocus") ?
+            e.classList.remove("infocus") :
+            e.classList.add("infocus")
+        );
+        return e;
+      }
+
+      function act(args) {
+        if (args.length < 1) return;
+        const cmd = args.shift();
+        const arg = args.shift();
+        if (cmd == 'ready') setReady(arg);
+        if (cmd == 'wait') setWaiting(arg);
+        if (cmd == 'done') setDone(arg);
+        if (cmd == 'init') setInit(arg);
+        act(args);
+      }
+
+      function sortChildren(e) {
+        if (!e.children) return;
+        const sorted = [...e.children].sort((a, b) => parseInt(a.innerText) > parseInt(b.innerText) ? 1 : -1);
+        sorted.forEach(c => e.removeChild(c));
+        sorted.forEach(c => e.appendChild(c));
+      }
+      function moveStyle(e) {
+        e.style.borderColor = "green";
+        e.style.boxShadow = "inset 4px 2px green";
+        setTimeout(() => {
+          e.style.borderColor = "black";
+          e.style.boxShadow = null;
+        }, 3000);
+      }
+
+      function setWaiting(n) {
+        let e = orders.get(n);
+        if (!e) e = create(n);
+        if (e.parentElement) e.parentElement.removeChild(e);
+        waiting.appendChild(e);
+        sortChildren(waiting);
+        moveStyle(e);
+      }
+      function setReady(n) {
+        let e = orders.get(n);
+        if (!e) e = create(n);
+        if (e.parentElement) e.parentElement.removeChild(e);
+        ready.appendChild(e);
+        sortChildren(ready);
+        moveStyle(e);
+      }
+      function setDone(n) {
+        let e = orders.get(n);
+        if (!e) e = create(n);
+        if (e.parentElement) e.parentElement.removeChild(e);
+        orders.delete(n);
+      }
+      function setInit({waiting, ready}) {
+        waiting.forEach(setWaiting);
+        ready.forEach(setReady);
+        sortChildren(waiting);
+        sortChildren(ready);
+      }
+
+      const p = new SimplePeer({
+        initiator: true,
+        trickle: false
+      });
+      p.on('error', err => console.log('error', err));
+      p.on('signal', data => {
+        const room = location.hash.replace('#', '');
+        fetch(`/connect?room=${room}&offer=${encodeURIComponent(JSON.stringify(data))}`)
+          .then(res => res.json())
+          .then(answer => {
+            console.log(answer);
+            p.signal(answer)
+          });
+      });
+      p.on('connect', () => {
+        console.log('CONNECT')
+        p.send('Dear Server, nice to meet you.')
+      });
+      p.on('data', data => {
+        console.log('data: ' + data);
+        data = JSON.parse(data);
+        act(data);
+      });
+    </script>
+  </body>
+</html>

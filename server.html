@@ -1,0 +1,247 @@
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <style>
+      body {
+        font-family: 'Open Sans', sans-serif;
+      }
+      body > section {
+        display: flex;
+        min-height: 80%;
+        font-size: larger;
+      }
+      header {
+        display: flex;
+      }
+      header > section {
+        width: 50%;
+      }
+      header > section:last-of-type  {
+        text-align: right;
+      }
+      #waiting {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: start;
+        width: 50%;
+        padding-right: 1em;
+        border-right: 2px black solid;
+      }
+      #ready {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: start;
+        justify-content: right;
+        width: 50%;
+        padding-left: 1em;
+      }
+      section span {
+        padding: 0.4em;
+        margin: 0.1em;
+        border-radius: 25% 10%;
+        border: 1px black solid;
+        cursor: pointer;
+      }
+      #controls {
+        position: fixed;
+        left: auto;
+        bottom: 8px;
+      }
+      button {
+        font-size: xx-large;
+      }
+         
+    </style>
+    <header>
+      <section>
+        <h1>Snart klart</h2>
+      </section>
+      <section>
+        <h1>Redo att hamta</h2>
+      </section>
+    </header>
+    <section>
+    <section id="waiting"></section>
+    <section id="ready"></section>
+    </section>
+
+    <div id="controls">
+    <button id="add" onclick="commandAndAct('wait', nextOrderNumber()); updateAddOrderButton()">ADD</button>
+    <button id="inc" onclick="offset++; updateAddOrderButton()">+</button>
+    <button id="dec" onclick="offset--; updateAddOrderButton()">-</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.11.1/simplepeer.min.js"></script>
+    <script>
+      const peers = new Set();
+      const orders = new Map();
+      const ready = document.getElementById("ready");
+      const waiting = document.getElementById("waiting");
+      
+      let offset = 1;
+      const nextOrderNumber = () => offset + Math.max(...orders.keys(), 100);
+      const updateAddOrderButton = () => document.getElementById('add').innerText = 'ADD '+nextOrderNumber();
+      updateAddOrderButton();
+
+      const create = (n) => {
+        offset = 1;
+        const e = document.createElement("span");
+        orders.set(n, e);
+        e.innerText = n;
+        e.setAttribute('role', 'button');
+        e.style.borderRadius = [1, 2, 3, 4].map(_ => Math.random() > 0.5 ? "25%" : "10%").join(" ")
+        e.oncontextmenu = event => {
+          // hack to hijack right click
+          event.preventDefault();
+          commandAndAct('done', n);
+        };
+        e.onclick = event => {
+          if (event.button == 0) {
+            if (e.parentElement === waiting) commandAndAct('ready', n);
+            else if (e.parentElement === ready) commandAndAct('wait', n);
+          }
+        };
+        return e;
+      }
+
+      function act(args) {
+        if (args.length < 1) return;
+        const cmd = args.shift();
+        const arg = args.shift();
+        if (cmd == 'ready') setReady(arg);
+        if (cmd == 'wait') setWaiting(arg);
+        if (cmd == 'done') setDone(arg);
+        if (cmd == 'init') setInit(arg);
+        act(args);
+      }
+
+      function commandAndAct() {
+        console.log(arguments);
+        const args = [...arguments];
+        peers.forEach(p => command(p, args));
+        act(args);
+      };
+
+      function command(p, args) {
+        p.send(JSON.stringify(args));
+      };
+
+      function sortChildren(e) {
+        if (!e.children) return;
+        const sorted = [...e.children].sort((a, b) => parseInt(a.innerText) > parseInt(b.innerText) ? 1 : -1);
+        sorted.forEach(c => e.removeChild(c));
+        sorted.forEach(c => e.appendChild(c));
+      }
+      function moveStyle(e) {
+        e.style.borderColor = "green";
+        e.style.boxShadow = "inset 4px 2px green";
+        setTimeout(() => {
+          e.style.borderColor = "black";
+          e.style.boxShadow = null;
+        }, 3000);
+      }
+
+      function setWaiting(n) {
+        let e = orders.get(n);
+        if (!e) e = create(n);
+        if (e.parentElement) e.parentElement.removeChild(e);
+        waiting.appendChild(e);
+        sortChildren(waiting);
+        moveStyle(e);
+      }
+      function setReady(n) {
+        let e = orders.get(n);
+        if (!e) e = create(n);
+        if (e.parentElement) e.parentElement.removeChild(e);
+        ready.appendChild(e);
+        sortChildren(ready);
+        moveStyle(e);
+      }
+      function setDone(n) {
+        let e = orders.get(n);
+        if (!e) e = create(n);
+        if (e.parentElement) e.parentElement.removeChild(e);
+        orders.delete(n);
+        updateAddOrderButton();
+      }
+      function setInit({waiting, ready}) {
+        waiting.forEach(setWaiting);
+        ready.forEach(setReady);
+        sortChildren(waiting);
+        sortChildren(ready);
+      }
+
+      function newPeer(offer) {
+        const p = new SimplePeer({
+          initiator: false,
+          trickle: false
+        });
+        p.on('error', err => {
+          console.log('error', err);
+          peers.delete(p);
+        });
+        p.on('close', e => {
+          console.log('close', e);
+          peers.delete(p);
+        });
+        p.on('connect', () => {
+          console.log('CONNECT')
+          const ws = []; const rs = [];
+          for (const [n, e] of orders.entries()) {
+            if (e.parentElement === waiting) ws.push(n);
+            else if (e.parentElement === ready) rs.push(n);
+          }
+          command(p, ['init', {waiting: ws, ready: rs}]);
+          peers.add(p);
+        });
+        p.on('data', data => {
+          console.log('data: ' + data);
+        });
+        return p;
+      }
+
+      function connect() {
+        // Example values - the "room" is the sha-256 hash of the token.
+        //const token = "test";
+        //const room = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+        const room = location.hash.replace('#', '');
+        const token = new URL(location.href).searchParams.get("token");
+        const url = "ws://" + location.host + (location.port == '' ? ':80' : '') + `/clients?room=${room}&token=${token}`;
+        console.log("connecting to ", url);
+        const socket = new WebSocket(url);
+
+        socket.addEventListener('open', function (event) {
+          console.log('Hello Server!');
+        });
+
+        socket.onclose = function(e) {
+          console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
+          setTimeout(function() {
+            connect();
+          }, 1000);
+        };
+
+        socket.onerror = function(err) {
+          console.error('Socket encountered error: ', err, 'Closing socket');
+          socket.close();
+        };
+
+        socket.addEventListener('message', function (event) {
+          console.log('Message from server ', event.data);
+          const {id, offer} = JSON.parse(event.data);
+          const p = newPeer();
+          p.on('signal', answer => {
+            socket.send(JSON.stringify({id, answer}))
+          });
+          p.signal(offer);
+        });
+      }
+      connect();
+    </script>
+  </body>
+</html>
