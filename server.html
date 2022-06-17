@@ -212,9 +212,8 @@
         const room = location.hash.replace('#', '');
         const token = new URL(location.href).searchParams.get("token");
         const url = (
-          location.origin.startsWith("https") ? "wss://" : "ws://"
+          (location.origin.startsWith("https") ? "wss://" : "ws://")
           + location.host
-          + location.port ? `:${location.port}` : ''
           + `/clients?room=${room}&token=${token}`
         );
         console.log("connecting to ", url);
