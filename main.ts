@@ -1,22 +1,39 @@
 import { serve } from "https://deno.land/std@0.140.0/http/server.ts";
 
-const hosts: Map<string, WebSocket> = new Map();
-const waiting: Map<string, (answer: any) => void> = new Map();
+type RoomId = string;
+const channels: Map<RoomId, BroadcastChannel> = new Map();
+const hosts: Map<RoomId, WebSocket> = new Map();
 
-const waitForAnswer = (id: string, room: string, offer: any) => {
-  const host = hosts.get(room);
-  if (host) host.send(JSON.stringify({id, offer}));
+type ClientId = string;
+const waiting: Map<ClientId, (answer: any) => void> = new Map();
+
+const waitForAnswer = (id: ClientId, room: RoomId, offer: any) => {
   return new Promise((resolve, reject) => {
+    console.log(`client ${id} waiting on ${room}`);
     setTimeout(() => {
       waiting.delete(id);
       reject();
     }, 10000);
+
+    if (hosts.has(room)) {
+      console.log(`\t my host, questioning.`);
+      hosts.get(room)?.send(JSON.stringify({id, offer}));
+    } else {
+      const channel = new BroadcastChannel(room);
+      console.log(`\t forwarding question.`);
+      channel.postMessage({id, offer});
+      channel.onmessage = ({data}) => {
+        if (data.id === id) {
+          console.log(`client ${id} received channel message`);
+          console.log(`\t answer from ${room}`);
+          console.log(`\t forwarding answer.`);
+          resolve(data.answer);
+        }
+      }
+    }
     waiting.set(id, resolve);
   });
-}
-
-//const clientsChannel = new BroadcastChannel("clients");
-
+};
 
 serve(async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
@@ -42,7 +59,7 @@ serve(async (req: Request): Promise<Response> => {
         if (!offer) return new Response("No offer made", { status: 400 });
         if (!room) return new Response("No room specified", { status: 400 });
 
-        const id = crypto.randomUUID();
+        const id: ClientId = crypto.randomUUID();
         return waitForAnswer(id, room, offer)
           .then(answer =>
             new Response(JSON.stringify(answer), {
@@ -53,7 +70,7 @@ serve(async (req: Request): Promise<Response> => {
       }
 
       if (url.pathname.match(/^\/clients\/?$/)) {
-        console.log("received a connection");
+        console.log("received host connection request");
         const token = url.searchParams.get("token");
         const room = url.searchParams.get("room");
         if (!token)
@@ -64,7 +81,6 @@ serve(async (req: Request): Promise<Response> => {
           .then(buf => Array.from(new Uint8Array(buf)))
           .then(arr => arr.map(b => b.toString(16).padStart(2, '0')).join(''));
 
-        console.log(room, hexDigestToken, token);
         if (room != hexDigestToken)
           return new Response("Unauthorized", { status: 403 });
 
@@ -73,28 +89,43 @@ serve(async (req: Request): Promise<Response> => {
           return new Response("request isn't trying to upgrade to websocket.");
 
         const { socket, response } = Deno.upgradeWebSocket(req);
+        const channel = new BroadcastChannel(room);
         socket.onopen = () => {
-          console.log("socket opened");
+          console.log(`host ${room} open:`);
           hosts.set(room, socket);
+          channel.onmessage = ev => {
+            console.log(`host ${room} channel message:`);
+            console.log(`\t question from ${ev.data.id}`);
+            console.log(`\t forwarding question.`);
+            socket.send(JSON.stringify(ev.data));
+          };
+          channels.set(room, channel);
         };
         socket.onmessage = (e) => {
-          console.log("socket message:", e.data);
+          console.log(`host ${room} message:`);
           const {id, answer} = JSON.parse(e.data);
-          const resolve = waiting.get(id);
-          if (resolve) resolve(answer);
+          console.log(`\t answer to ${id}`);
+          if (waiting.has(id)) {
+            console.log(`\t my client, answering.`);
+            waiting.get(id)?.(answer);
+          }
+          else {
+            console.log(`\t forwarding answer.`);
+            channel.postMessage({id, answer});
+          }
         };
-        socket.onerror = (e) => console.log("socket errored:", e);
+        socket.onerror = (e) => console.log(`host ${room} error: ${e}`);
         socket.onclose = () => {
-          console.log("socket closed");
+          console.log(`host ${room} close.`);
           hosts.delete(room);
         };
         return response;
-      
       }
+
       return new Response("Not found", { status: 404 });
     }
 
     default:
       return new Response("Invalid method", { status: 405 });
   }
-}, { port: 80 });
+});
