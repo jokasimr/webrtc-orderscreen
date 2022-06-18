@@ -137,7 +137,6 @@
       function setInit(state) {
         waiting.replaceChildren([]);
         ready.replaceChildren([]);
-        orders.clear();
         state.waiting.forEach(n => setWaiting({n, indicate: false}));
         state.ready.forEach(n => setReady({n, indicate: false}));
         sortChildren(waiting);
