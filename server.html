@@ -13,7 +13,7 @@
       body > section {
         display: flex;
         min-height: 80%;
-        font-size: larger;
+        font-size: xx-large;
       }
       header {
         display: flex;
@@ -43,10 +43,8 @@
         padding-left: 1em;
       }
       section span {
-        padding: 0.6em;
         margin: 0.2em;
         border-radius: 25% 10%;
-        border: 1px black solid;
         cursor: pointer;
       }
       #controls {
@@ -96,7 +94,7 @@
         orders.set(n, e);
         e.innerText = n;
         e.setAttribute('role', 'button');
-        e.style.borderRadius = [1, 2, 3, 4].map(_ => Math.random() > 0.5 ? "25%" : "10%").join(" ")
+        e.style.borderRadius = [1, 2, 3, 4].map(_ => Math.random() > 0.5 ? "25%" : "10%").join(" ");
         e.oncontextmenu = event => {
           // hack to hijack right click
           event.preventDefault();
