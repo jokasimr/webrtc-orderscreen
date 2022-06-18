@@ -112,23 +112,23 @@
         }, 3000);
       }
 
-      function setWaiting(n) {
+      function setWaiting({n, indicate=true}) {
         let e = orders.get(n);
         if (!e) e = create(n);
         if (e.parentElement) e.parentElement.removeChild(e);
         waiting.appendChild(e);
         sortChildren(waiting);
-        moveStyle(e);
+        if (indicate) moveStyle(e);
       }
-      function setReady(n) {
+      function setReady({n, indicate=true}) {
         let e = orders.get(n);
         if (!e) e = create(n);
         if (e.parentElement) e.parentElement.removeChild(e);
         ready.appendChild(e);
         sortChildren(ready);
-        moveStyle(e);
+        if (indicate) moveStyle(e);
       }
-      function setDone(n) {
+      function setDone({n}) {
         let e = orders.get(n);
         if (!e) e = create(n);
         if (e.parentElement) e.parentElement.removeChild(e);
@@ -138,8 +138,8 @@
         waiting.replaceChildren([]);
         ready.replaceChildren([]);
         orders.clear();
-        state.waiting.forEach(setWaiting);
-        state.ready.forEach(setReady);
+        state.waiting.forEach(n => setWaiting({n, indicate: false}));
+        state.ready.forEach(n => setReady({n, indicate: false}));
         sortChildren(waiting);
         sortChildren(ready);
       }

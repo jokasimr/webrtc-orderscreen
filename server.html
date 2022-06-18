@@ -70,7 +70,7 @@
     </section>
 
     <div id="controls">
-    <button id="add" onclick="commandAndAct('wait', nextOrderNumber()); updateAddOrderButton()">ADD</button>
+    <button id="add" onclick="commandAndAct('wait', {n: nextOrderNumber()}); updateAddOrderButton()">ADD</button>
     <button id="inc" onclick="offset++; updateAddOrderButton()">+</button>
     <button id="dec" onclick="offset--; updateAddOrderButton()">-</button>
     </div>
@@ -97,12 +97,12 @@
         e.oncontextmenu = event => {
           // hack to hijack right click
           event.preventDefault();
-          commandAndAct('done', n);
+          commandAndAct('done', {n});
         };
         e.onclick = event => {
           if (event.button == 0) {
-            if (e.parentElement === waiting) commandAndAct('ready', n);
-            else if (e.parentElement === ready) commandAndAct('wait', n);
+            if (e.parentElement === waiting) commandAndAct('ready', {n});
+            else if (e.parentElement === ready) commandAndAct('wait', {n});
           }
         };
         return e;
@@ -145,34 +145,28 @@
         }, 3000);
       }
 
-      function setWaiting(n) {
+      function setWaiting({n, indicate=true}) {
         let e = orders.get(n);
         if (!e) e = create(n);
         if (e.parentElement) e.parentElement.removeChild(e);
         waiting.appendChild(e);
         sortChildren(waiting);
-        moveStyle(e);
+        if (indicate) moveStyle(e);
       }
-      function setReady(n) {
+      function setReady({n, indicate=true}) {
         let e = orders.get(n);
         if (!e) e = create(n);
         if (e.parentElement) e.parentElement.removeChild(e);
         ready.appendChild(e);
         sortChildren(ready);
-        moveStyle(e);
+        if (indicate) moveStyle(e);
       }
-      function setDone(n) {
+      function setDone({n}) {
         let e = orders.get(n);
         if (!e) e = create(n);
         if (e.parentElement) e.parentElement.removeChild(e);
         orders.delete(n);
         updateAddOrderButton();
-      }
-      function setInit({waiting, ready}) {
-        waiting.forEach(setWaiting);
-        ready.forEach(setReady);
-        sortChildren(waiting);
-        sortChildren(ready);
       }
 
       function newPeer(offer) {
