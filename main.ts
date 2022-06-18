@@ -28,6 +28,7 @@ const waitForAnswer = (id: ClientId, room: RoomId, offer: any) => {
           console.log(`\t answer from ${room}`);
           console.log(`\t forwarding answer.`);
           resolve(data.answer);
+          channel.close();
         }
       }
     }
@@ -97,7 +98,7 @@ serve(async (req: Request): Promise<Response> => {
             console.log(`host ${room} channel message:`);
             console.log(`\t question from ${ev.data.id}`);
             console.log(`\t forwarding question.`);
-            socket.send(JSON.stringify(ev.data));
+            hosts.get(room)?.send(JSON.stringify(ev.data));
           };
           channels.set(room, channel);
         };
@@ -118,6 +119,8 @@ serve(async (req: Request): Promise<Response> => {
         socket.onclose = () => {
           console.log(`host ${room} close.`);
           hosts.delete(room);
+          channels.get(room)?.close();
+          channels.delete(room);
         };
         return response;
       }

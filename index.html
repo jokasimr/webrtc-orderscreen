@@ -13,7 +13,7 @@
       body > section {
         display: flex;
         min-height: 80%;
-        font-size: larger;
+        font-size: xx-large;
       }
       header {
         display: flex;
@@ -43,18 +43,12 @@
         padding-left: 1em;
       }
       section span {
-        padding: 0.6em;
         margin: 0.2em;
         border-radius: 25% 10%;
-        border: 1px black solid;
         cursor: pointer;
-        display: flex;
-        justify-content: center;
-        align-items: center;
       }
       .infocus {
         font-weight: bold;
-        font-size: 1.2em;
         background-color: lightgreen;
       }
          
@@ -82,6 +76,8 @@
         const e = document.createElement("span");
         orders.set(n, e);
         e.innerText = n;
+        e.setAttribute('role', 'button');
+        e.style.borderRadius = [1, 2, 3, 4].map(_ => Math.random() > 0.5 ? "25%" : "10%").join(" ");
         e.onclick = event => (
           e.classList.contains("infocus") ?
             e.classList.remove("infocus") :
@@ -107,6 +103,7 @@
         sorted.forEach(c => e.removeChild(c));
         sorted.forEach(c => e.appendChild(c));
       }
+
       function moveStyle(e) {
         e.style.borderColor = "green";
         e.style.boxShadow = "inset 4px 2px green";
@@ -138,36 +135,68 @@
         if (e.parentElement) e.parentElement.removeChild(e);
         orders.delete(n);
       }
-      function setInit({waiting, ready}) {
-        waiting.forEach(setWaiting);
-        ready.forEach(setReady);
+      function setInit(state) {
+        waiting.replaceChildren([]);
+        ready.replaceChildren([]);
+        orders.clear();
+        state.waiting.forEach(setWaiting);
+        state.ready.forEach(setReady);
         sortChildren(waiting);
         sortChildren(ready);
       }
 
-      const p = new SimplePeer({
-        initiator: true,
-        trickle: false
-      });
-      p.on('error', err => console.log('error', err));
-      p.on('signal', data => {
-        const room = location.hash.replace('#', '');
-        fetch(`/connect?room=${room}&offer=${encodeURIComponent(JSON.stringify(data))}`)
-          .then(res => res.json())
-          .then(answer => {
-            console.log(answer);
-            p.signal(answer)
+      let errorMessage = null;
+      function connect(room, signal) {
+        console.log(`connnecting to ${room}`);
+        return fetch(`/connect?room=${room}&offer=${encodeURIComponent(JSON.stringify(signal))}`)
+          .then(async res => {
+            if (res.ok) {
+              console.log(`received answer from ${room}`);
+              errorMessage = null;
+              return res.json();
+            }
+            throw {message: await res.text()};
+          })
+          .catch(async err => {
+            console.log(`error when connecting to ${room}: ${err}`);
+            console.log(`retry in 5000`);
+            errorMessage = err.message;
+            await new Promise((r, _) => setTimeout(r, 5000));
+            return connect(room, signal);
           });
-      });
-      p.on('connect', () => {
-        console.log('CONNECT')
-        p.send('Dear Server, nice to meet you.')
-      });
-      p.on('data', data => {
-        console.log('data: ' + data);
-        data = JSON.parse(data);
-        act(data);
-      });
+      }
+
+      function newPeer() {
+        const p = new SimplePeer({
+          initiator: true,
+          trickle: false
+        });
+        p.on('close', () => {
+          console.log('connection closed');
+          newPeer();
+        });
+        p.on('error', err => console.log('error', err));
+        p.on('signal', data => {
+          const room = location.hash.replace('#', '');
+          console.log(`signal initiated`);
+          connect(room, data)
+            .then(answer => {
+              console.log(answer);
+              p.signal(answer)
+          });
+        });
+        p.on('connect', () => {
+          console.log('CONNECT')
+          p.send('Dear Server, nice to meet you.')
+        });
+        p.on('data', data => {
+          console.log('data: ' + data);
+          data = JSON.parse(data);
+          act(data);
+        });
+      }
+
+      newPeer();
     </script>
   </body>
 </html>
